@@ -1,0 +1,17 @@
+{
+  "name": "evolution-ar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scan an image and watch a product's evolution in AR",
+  "scripts": {
+    "prep": "node scripts/prep.js",
+    "serve": "npx serve www"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "aframe": "1.5.0",
+    "mind-ar": "1.2.5"
+  }
+}

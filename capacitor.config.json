@@ -1,0 +1,8 @@
+{
+  "appId": "com.example.evolutionar",
+  "appName": "Evolution AR",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
