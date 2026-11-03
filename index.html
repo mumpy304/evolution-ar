@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Evolution AR</title>
+<script src="libs/aframe.min.js"></script>
+<script src="libs/mindar-image-aframe.prod.js"></script>
+<script src="products.js"></script>
+<style>
+  :root { --accent:#7c5cff; --bg:rgba(15,15,25,.88); }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; font-family:system-ui,sans-serif; background:#0b0b14; color:#fff; overflow:hidden; }
+  #intro { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:24px; text-align:center; z-index:20; background:radial-gradient(circle at 30% 20%,#2a1f5c,#0b0b14); }
+  #intro h1 { margin:0; font-size:28px; }
+  #intro p { margin:0; max-width:320px; opacity:.8; line-height:1.4; }
+  button { font:inherit; border:0; border-radius:12px; padding:12px 20px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid #fff5; }
+  #hud { position:fixed; left:0; right:0; bottom:0; z-index:10; padding:16px; display:none; }
+  #card { background:var(--bg); backdrop-filter:blur(8px); border-radius:18px; padding:16px; }
+  #prodname { font-size:12px; letter-spacing:.1em; text-transform:uppercase; opacity:.6; }
+  #year { font-size:34px; font-weight:800; color:var(--accent); line-height:1.1; }
+  #title { font-size:18px; font-weight:600; margin:2px 0 6px; }
+  #desc { font-size:14px; opacity:.85; line-height:1.4; min-height:56px; }
+  #dots { display:flex; gap:6px; margin:12px 0; }
+  .dot { flex:1; height:5px; border-radius:3px; background:#fff3; }
+  .dot.on { background:var(--accent); }
+  .row { display:flex; gap:8px; }
+  .row button { flex:1; padding:10px; }
+  #scanmsg { position:fixed; top:20px; left:0; right:0; text-align:center; z-index:10; display:none; font-size:15px; text-shadow:0 1px 4px #000; }
+  .a-enter-vr, .a-orientation-modal { display:none !important; }
+  #demoStage { position:fixed; inset:0 0 250px 0; display:none; align-items:center; justify-content:center; font-size:120px; z-index:5; }
+</style>
+</head>
+<body>
+<div id="intro">
+  <h1>🔭 Evolution AR</h1>
+  <p>Point your camera at the product image and watch how it evolved over time.</p>
+  <button id="startBtn">Start AR</button>
+  <button id="demoBtn" class="ghost">Preview without camera</button>
+</div>
+
+<div id="scanmsg">Point at the product image…</div>
+<div id="demoStage"></div>
+
+<div id="hud">
+  <div id="card">
+    <div id="prodname"></div>
+    <div id="year"></div>
+    <div id="title"></div>
+    <div id="desc"></div>
+    <div id="dots"></div>
+    <div class="row">
+      <button id="prev" class="ghost">◀ Prev</button>
+      <button id="play">⏸ Pause</button>
+      <button id="next" class="ghost">Next ▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const P = window.PRODUCTS;
+const $ = id => document.getElementById(id);
+let current = null;      // index into P of the product being shown
+let stage = 0;
+let autoplay = true;
+let timer = null;
+let demoMode = false;
+
+// Card image (SVG data URI) for a stage, so no image files are needed.
+function cardSrc(s, i, n) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="320">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#2a1f5c"/></linearGradient></defs>
+    <rect width="512" height="320" rx="28" fill="url(#g)"/>
+    <text x="256" y="150" font-size="110" text-anchor="middle">${s.emoji}</text>
+    <text x="256" y="215" font-size="44" font-weight="700" fill="#fff" text-anchor="middle" font-family="sans-serif">${s.year}</text>
+    <text x="256" y="262" font-size="26" fill="#fffd" text-anchor="middle" font-family="sans-serif">${s.title}</text>
+    <text x="256" y="298" font-size="18" fill="#fff9" text-anchor="middle" font-family="sans-serif">${i+1} / ${n}</text>
+  </svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+function render(animate = true) {
+  if (current === null) return;
+  const prod = P[current], s = prod.stages[stage];
+  $("prodname").textContent = prod.name + " evolution";
+  $("year").textContent = s.year;
+  $("title").textContent = s.title;
+  $("desc").textContent = s.desc;
+  $("dots").innerHTML = prod.stages.map((_, i) => `<div class="dot ${i <= stage ? "on" : ""}"></div>`).join("");
+  $("play").textContent = autoplay ? "⏸ Pause" : "▶ Play";
+
+  if (demoMode) { $("demoStage").textContent = s.emoji; return; }
+
+  const img = document.querySelector(`#img${current}`);
+  if (img) {
+    img.setAttribute("src", cardSrc(s, stage, prod.stages.length));
+    if (animate) {
+      img.removeAttribute("animation__pop");
+      img.setAttribute("animation__pop", "property: scale; from: 0.6 0.6 0.6; to: 1 1 1; dur: 450; easing: easeOutBack");
+    }
+  }
+}
+
+function go(d) {
+  if (current === null) return;
+  const n = P[current].stages.length;
+  stage = (stage + d + n) % n;
+  render();
+}
+
+function restartTimer() {
+  clearInterval(timer);
+  timer = setInterval(() => { if (autoplay && current !== null) go(1); }, 3000);
+}
+
+$("prev").onclick = () => { go(-1); };
+$("next").onclick = () => { go(1); };
+$("play").onclick = () => { autoplay = !autoplay; render(false); };
+
+function show(i) {
+  current = i; stage = 0;
+  $("hud").style.display = "block";
+  $("scanmsg").style.display = "none";
+  render();
+}
+function hide(i) {
+  if (current !== i) return;
+  current = null;
+  $("hud").style.display = "none";
+  $("scanmsg").style.display = "block";
+}
+
+$("demoBtn").onclick = () => {
+  demoMode = true;
+  $("intro").style.display = "none";
+  $("demoStage").style.display = "flex";
+  show(0);
+  restartTimer();
+};
+
+$("startBtn").onclick = () => {
+  $("intro").style.display = "none";
+  $("scanmsg").style.display = "block";
+
+  const scene = document.createElement("a-scene");
+  scene.setAttribute("mindar-image", "imageTargetSrc: ./targets.mind; uiLoading: yes; uiScanning: no; uiError: yes");
+  scene.setAttribute("color-space", "sRGB");
+  scene.setAttribute("renderer", "colorManagement: true, physicallyCorrectLights");
+  scene.setAttribute("vr-mode-ui", "enabled: false");
+  scene.setAttribute("device-orientation-permission-ui", "enabled: false");
+
+  let html = `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
+  P.forEach((p, i) => {
+    html += `<a-entity id="t${i}" mindar-image-target="targetIndex: ${p.targetIndex}">
+      <a-image id="img${i}" src="${cardSrc(p.stages[0], 0, p.stages.length)}"
+               width="1" height="0.625" position="0 0.75 0.15" transparent="true"></a-image>
+    </a-entity>`;
+  });
+  scene.innerHTML = html;
+  document.body.appendChild(scene);
+
+  P.forEach((_, i) => {
+    const t = document.getElementById(`t${i}`);
+    t.addEventListener("targetFound", () => show(i));
+    t.addEventListener("targetLost", () => hide(i));
+  });
+  restartTimer();
+};
+</script>
+</body>
+</html>
